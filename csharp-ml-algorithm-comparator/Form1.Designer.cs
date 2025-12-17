@@ -25,7 +25,7 @@
             this.SuspendLayout();
 
             // 
-            // panelHeader (Modern Başlık Çubuğu)
+            // panelHeader
             // 
             this.panelHeader.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(41)))), ((int)(((byte)(128)))), ((int)(((byte)(185)))));
             this.panelHeader.Controls.Add(this.lblTitle);
@@ -35,7 +35,7 @@
             this.panelHeader.Size = new System.Drawing.Size(480, 60);
 
             // 
-            // lblTitle (Uygulama İsmi)
+            // lblTitle
             // 
             this.lblTitle.AutoSize = true;
             this.lblTitle.Font = new System.Drawing.Font("Segoe UI Semibold", 16F, System.Drawing.FontStyle.Bold);
@@ -46,7 +46,7 @@
             this.lblTitle.Text = "AI CLASSIFIER STUDIO";
 
             // 
-            // txtFilePath (Dosya Yolu Kutusu)
+            // txtFilePath
             // 
             this.txtFilePath.BackColor = System.Drawing.Color.White;
             this.txtFilePath.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
@@ -57,7 +57,7 @@
             this.txtFilePath.Size = new System.Drawing.Size(320, 23);
 
             // 
-            // btnBrowse (Modern Mavi Buton)
+            // btnBrowse
             // 
             this.btnBrowse.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(52)))), ((int)(((byte)(152)))), ((int)(((byte)(219)))));
             this.btnBrowse.Cursor = System.Windows.Forms.Cursors.Hand;
@@ -73,7 +73,7 @@
             this.btnBrowse.Click += new System.EventHandler(this.btnBrowse_Click);
 
             // 
-            // lblStatus (Durum Çubuğu)
+            // lblStatus
             // 
             this.lblStatus.Font = new System.Drawing.Font("Segoe UI Italic", 9.5F);
             this.lblStatus.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(127)))), ((int)(((byte)(140)))), ((int)(((byte)(141)))));
@@ -83,7 +83,7 @@
             this.lblStatus.Text = "Ready to analyze...";
 
             // 
-            // pnlAttributes (Giriş Alanı Paneli)
+            // pnlAttributes
             // 
             this.pnlAttributes.AutoScroll = true;
             this.pnlAttributes.BackColor = System.Drawing.Color.White;
@@ -94,7 +94,7 @@
             this.pnlAttributes.Size = new System.Drawing.Size(440, 220);
 
             // 
-            // btnDiscover (Modern Yeşil Buton)
+            // btnDiscover
             // 
             this.btnDiscover.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(46)))), ((int)(((byte)(204)))), ((int)(((byte)(113)))));
             this.btnDiscover.Cursor = System.Windows.Forms.Cursors.Hand;
@@ -118,7 +118,7 @@
             this.lblResultTitle.Text = "Analysis Result:";
 
             // 
-            // lblResult (Sonuç Alanı)
+            // lblResult
             // 
             this.lblResult.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(236)))), ((int)(((byte)(240)))), ((int)(((byte)(241)))));
             this.lblResult.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold);

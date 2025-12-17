@@ -38,48 +38,52 @@ namespace csharp_ml_algorithm_comparator
                 {
                     txtFilePath.Text = ofd.FileName;
 
-                    // Load dataset based on file extension
+                    // User information
+                    lblStatus.Text = "Processing... The program may freeze for a moment, please wait.";
+                    lblStatus.ForeColor = Color.Red;
+
+                    Application.DoEvents();
+
+                    // Load the dataset
                     if (ofd.FileName.ToLower().EndsWith(".csv"))
                     {
-                        // Use CSVLoader for .csv files
                         weka.core.converters.CSVLoader loader = new weka.core.converters.CSVLoader();
                         loader.setSource(new java.io.File(ofd.FileName));
                         originalData = loader.getDataSet();
                     }
                     else
                     {
-                        // Use standard FileReader for .arff files
                         originalData = new Instances(new java.io.FileReader(ofd.FileName));
                     }
 
-                    // Set the class index (target attribute) to the last column by default
                     if (originalData.classIndex() == -1)
                         originalData.setClassIndex(originalData.numAttributes() - 1);
 
-                    // Run the competition between algorithms and generate the UI
+                    // Evaluate the metrics
                     EvaluateAlgorithms();
                     BuildInterface();
+
+                    // Results
+                    lblStatus.ForeColor = Color.FromArgb(127, 140, 141);
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show("File Load Error: " + ex.Message);
+                    lblStatus.Text = "Error loading file.";
                 }
             }
         }
 
-        /// <summary>
-        /// Compares multiple ML algorithms to find the most accurate one for the loaded dataset.
-        /// </summary>
         private void EvaluateAlgorithms()
         {
-            // Shuffling the data is critical to prevent bias, especially in ordered datasets like Iris
+            // Data shuffle
             java.util.Random rand = new java.util.Random(1);
             originalData.randomize(rand);
 
             double maxAcc = -1;
             string winnerName = "";
 
-            // List of 12 different approaches/parameters to satisfy project requirements
+            // 11 Classification Models
             var configs = new List<(string Name, Classifier Cl, string FilterMode)> {
                 ("3-NN (IBk)", new weka.classifiers.lazy.IBk(3), "Numeric"),
                 ("5-NN (IBk)", new weka.classifiers.lazy.IBk(5), "Numeric"),
@@ -96,34 +100,29 @@ namespace csharp_ml_algorithm_comparator
 
             foreach (var config in configs)
             {
-                // We use FilteredClassifier to package the classifier with its required preprocessing filters.
-                // This ensures that the same filters are automatically applied during prediction.
                 FilteredClassifier fc = new FilteredClassifier();
                 fc.setClassifier(config.Cl);
 
                 if (config.FilterMode == "Numeric")
                 {
-                    // For algorithms requiring numeric data (SVM, MLP, KNN, etc.):
-                    // Apply Normalization and NominalToBinary (Dummy attributes)
+                    // Apply normalization
                     MultiFilter multi = new MultiFilter();
                     multi.setFilters(new Filter[] { new Normalize(), new NominalToBinary() });
                     fc.setFilter(multi);
                 }
                 else if (config.FilterMode == "Discretize")
                 {
-                    // For Naive Bayes: Discretize numeric values into nominal bins
+                    // Discreatization
                     fc.setFilter(new Discretize());
                 }
                 else
                 {
-                    // Decision trees can handle both types, so no filtering is needed
                     fc.setFilter(new weka.filters.AllFilter());
                 }
 
-                // Test the performance of the current configuration
                 double acc = CalculateAccuracy(fc);
 
-                // Update the winner if the current accuracy is the highest
+                // Update the highest acc
                 if (acc > maxAcc)
                 {
                     maxAcc = acc;
@@ -132,7 +131,7 @@ namespace csharp_ml_algorithm_comparator
                 }
             }
 
-            // Train the final winner model on the full dataset for prediction readiness
+            // Train the final winner model on the full dataset
             if (cl_BEST != null)
             {
                 cl_BEST.buildClassifier(originalData);
@@ -140,25 +139,21 @@ namespace csharp_ml_algorithm_comparator
             }
         }
 
-        /// <summary>
-        /// Performs a train/test split and calculates the accuracy of a given classifier.
-        /// </summary>
         private double CalculateAccuracy(Classifier fc)
         {
             try
             {
+                // Train test split
                 int trainSize = originalData.numInstances() * percentSplit / 100;
                 int testSize = originalData.numInstances() - trainSize;
                 if (trainSize < 1 || testSize < 1) return 0;
 
-                // Split the instances into training and testing sets
                 Instances train = new Instances(originalData, 0, trainSize);
                 Instances test = new Instances(originalData, trainSize, testSize);
 
-                // Build the model using the training set
+                //This the model built on test dataset
                 fc.buildClassifier(train);
 
-                // Count correctly classified instances in the test set
                 int correct = 0;
                 for (int i = 0; i < test.numInstances(); i++)
                 {
@@ -170,9 +165,6 @@ namespace csharp_ml_algorithm_comparator
             catch { return 0; }
         }
 
-        /// <summary>
-        /// Dynamically creates ComboBoxes (for nominal) and TextBoxes (for numeric) based on dataset attributes.
-        /// </summary>
         private void BuildInterface()
         {
             pnlAttributes.Controls.Clear();
@@ -186,7 +178,7 @@ namespace csharp_ml_algorithm_comparator
 
                 if (attr.isNominal())
                 {
-                    // Create dropdown lists for categorical data
+                    // Dropdown options
                     ComboBox cb = new ComboBox { Name = "attr_" + i, Width = 150, DropDownStyle = ComboBoxStyle.DropDownList };
                     for (int j = 0; j < attr.numValues(); j++) cb.Items.Add(attr.value(j));
                     if (cb.Items.Count > 0) cb.SelectedIndex = 0;
@@ -194,25 +186,20 @@ namespace csharp_ml_algorithm_comparator
                 }
                 else
                 {
-                    // Create text boxes for numeric data
+                    // Numeric options
                     TextBox tb = new TextBox { Name = "attr_" + i, Width = 150, Text = "0" };
                     pnlAttributes.Controls.Add(tb);
                 }
-                // Ensure each attribute starts on a new line in the panel
                 pnlAttributes.SetFlowBreak(pnlAttributes.Controls[pnlAttributes.Controls.Count - 1], true);
             }
         }
 
-        /// <summary>
-        /// Collects UI input, creates a new instance, and uses the best model to predict its class.
-        /// </summary>
         private void btnDiscover_Click(object sender, EventArgs e)
         {
             if (cl_BEST == null || originalData == null) return;
 
             try
             {
-                // Create a temporary instance to hold the user input
                 Instance inst = new DenseInstance(originalData.numAttributes());
                 inst.setDataset(originalData);
 
@@ -229,8 +216,7 @@ namespace csharp_ml_algorithm_comparator
                     }
                 }
 
-                // Predict the class using the champion model
-                // FilteredClassifier automatically applies the necessary preprocessing to 'inst'
+                // Predict the class using the best model
                 double resultIndex = cl_BEST.classifyInstance(inst);
                 string resultLabel = originalData.classAttribute().value((int)resultIndex);
 

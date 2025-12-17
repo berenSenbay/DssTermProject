@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data;
-using System.Drawing;
-using System.Linq;
 using System.Windows.Forms;
-using System.IO;
 using weka.core;
 using weka.classifiers;
+using weka.classifiers.meta;
 using weka.filters;
+using weka.filters.unsupervised.attribute;
+using System.Drawing;
+using System.IO;
 
 namespace csharp_ml_algorithm_comparator
 {
@@ -24,65 +24,124 @@ namespace csharp_ml_algorithm_comparator
 
         private void btnBrowse_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog { Filter = "ARFF files (*.arff)|*.arff" };
+            OpenFileDialog ofd = new OpenFileDialog { Filter = "Data files (*.arff, *.csv)|*.arff;*.csv" };
+
             if (ofd.ShowDialog() == DialogResult.OK)
             {
-                txtFilePath.Text = ofd.FileName;
-                originalData = new Instances(new java.io.FileReader(ofd.FileName));
-                originalData.setClassIndex(originalData.numAttributes() - 1);
-                EvaluateAlgorithms();
-                BuildInterface();
+                try
+                {
+                    txtFilePath.Text = ofd.FileName;
+
+                    if (ofd.FileName.ToLower().EndsWith(".csv"))
+                    {
+                        weka.core.converters.CSVLoader loader = new weka.core.converters.CSVLoader();
+                        loader.setSource(new java.io.File(ofd.FileName));
+                        originalData = loader.getDataSet();
+                    }
+                    else
+                    {
+                        originalData = new Instances(new java.io.FileReader(ofd.FileName));
+                    }
+
+                    if (originalData.classIndex() == -1)
+                        originalData.setClassIndex(originalData.numAttributes() - 1);
+
+                    EvaluateAlgorithms();
+                    BuildInterface();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("File Load Error: " + ex.Message);
+                }
             }
         }
 
         private void EvaluateAlgorithms()
         {
+            // Veriyi karıştırıyoruz (Hocanın kodundaki Randomize filtresiyle aynı işlev)
+            java.util.Random rand = new java.util.Random(1);
+            originalData.randomize(rand);
+
             double maxAcc = -1;
-            string winner = "";
-            var algos = new List<(string Name, Classifier Cl, bool Num, bool Nom)> {
-                ("1-NN", new weka.classifiers.lazy.IBk(1), true, false),
-                ("3-NN", new weka.classifiers.lazy.IBk(3), true, false),
-                ("Naive Bayes", new weka.classifiers.bayes.NaiveBayes(), false, true),
-                ("J48", new weka.classifiers.trees.J48(), false, false),
-                ("SVM", new weka.classifiers.functions.SMO(), true, false),
-                ("MLP", new weka.classifiers.functions.MultilayerPerceptron(), true, false),
-                ("Logistic", new weka.classifiers.functions.Logistic(), true, false),
-                ("RandomForest", new weka.classifiers.trees.RandomForest(), false, false),
-                ("RandomTree", new weka.classifiers.trees.RandomTree(), false, false),
-                ("7-NN", new weka.classifiers.lazy.IBk(7), true, false)
+            string winnerName = "";
+
+            // Hocanın kodundaki 12 yaklaşımın tamamını ve filtre stratejilerini ekliyoruz
+            var configs = new List<(string Name, Classifier Cl, string FilterMode)> {
+                ("3-NN (IBk)", new weka.classifiers.lazy.IBk(3), "Numeric"),
+                ("5-NN (IBk)", new weka.classifiers.lazy.IBk(5), "Numeric"),
+                ("7-NN (IBk)", new weka.classifiers.lazy.IBk(7), "Numeric"),
+                ("9-NN (IBk)", new weka.classifiers.lazy.IBk(9), "Numeric"),
+                ("Naive Bayes", new weka.classifiers.bayes.NaiveBayes(), "Discretize"), // EKSİK KAPATILDI
+                ("Logistic Regression", new weka.classifiers.functions.Logistic(), "Numeric"),
+                ("J48 Decision Tree", new weka.classifiers.trees.J48(), "None"),
+                ("Random Forest", new weka.classifiers.trees.RandomForest(), "None"),
+                ("Random Tree", new weka.classifiers.trees.RandomTree(), "None"),
+                ("SVM (SMO)", new weka.classifiers.functions.SMO(), "Numeric"),
+                ("MLP (Neural Net)", new weka.classifiers.functions.MultilayerPerceptron(), "Numeric")
             };
 
-            foreach (var a in algos)
+            foreach (var config in configs)
             {
-                double acc = TestAlgo(new Instances(originalData), a.Cl, a.Num, a.Nom);
-                if (acc > maxAcc) { maxAcc = acc; winner = a.Name; cl_BEST = a.Cl; }
+                FilteredClassifier fc = new FilteredClassifier();
+                fc.setClassifier(config.Cl);
+
+                if (config.FilterMode == "Numeric")
+                {
+                    // Sayısal isteyenler: Normalize + NominalToBinary (Hocanın kodundaki sıra)
+                    MultiFilter multi = new MultiFilter();
+                    multi.setFilters(new Filter[] { new Normalize(), new NominalToBinary() });
+                    fc.setFilter(multi);
+                }
+                else if (config.FilterMode == "Discretize")
+                {
+                    // Naive Bayes için: Numeric verileri Nominale çevir (Discretization)
+                    fc.setFilter(new Discretize());
+                }
+                else
+                {
+                    fc.setFilter(new weka.filters.AllFilter());
+                }
+
+                double acc = CalculateAccuracy(fc);
+
+                if (acc > maxAcc)
+                {
+                    maxAcc = acc;
+                    winnerName = config.Name;
+                    cl_BEST = fc;
+                }
             }
-            cl_BEST.buildClassifier(originalData);
-            lblStatus.Text = $"{winner} is best (%{maxAcc:F2})";
+
+            if (cl_BEST != null)
+            {
+                cl_BEST.buildClassifier(originalData);
+                lblStatus.Text = $"Best: {winnerName} (%{maxAcc:F2} Acc)";
+
+                // İstersen burada hocan gibi modeli kaydedebilirsin:
+                // weka.core.SerializationHelper.write("best_model.model", cl_BEST);
+            }
         }
 
-        private double TestAlgo(Instances insts, Classifier cl, bool num, bool nom)
+        private double CalculateAccuracy(Classifier fc)
         {
             try
             {
-                if (num)
-                {
-                    var n = new weka.filters.unsupervised.attribute.Normalize();
-                    n.setInputFormat(insts); insts = Filter.useFilter(insts, n);
-                    var b = new weka.filters.unsupervised.attribute.NominalToBinary();
-                    b.setInputFormat(insts); insts = Filter.useFilter(insts, b);
-                }
-                if (nom)
-                {
-                    var d = new weka.filters.unsupervised.attribute.Discretize();
-                    d.setInputFormat(insts); insts = Filter.useFilter(insts, d);
-                }
-                int trainSize = insts.numInstances() * percentSplit / 100;
-                cl.buildClassifier(new Instances(insts, 0, trainSize));
+                int trainSize = originalData.numInstances() * percentSplit / 100;
+                int testSize = originalData.numInstances() - trainSize;
+                if (trainSize < 1 || testSize < 1) return 0;
+
+                Instances train = new Instances(originalData, 0, trainSize);
+                Instances test = new Instances(originalData, trainSize, testSize);
+
+                fc.buildClassifier(train);
+
                 int correct = 0;
-                for (int i = trainSize; i < insts.numInstances(); i++)
-                    if (cl.classifyInstance(insts.instance(i)) == insts.instance(i).classValue()) correct++;
-                return (double)correct / (insts.numInstances() - trainSize) * 100.0;
+                for (int i = 0; i < test.numInstances(); i++)
+                {
+                    if (fc.classifyInstance(test.instance(i)) == test.instance(i).classValue())
+                        correct++;
+                }
+                return (double)correct / testSize * 100.0;
             }
             catch { return 0; }
         }
@@ -90,32 +149,64 @@ namespace csharp_ml_algorithm_comparator
         private void BuildInterface()
         {
             pnlAttributes.Controls.Clear();
+            pnlAttributes.AutoScroll = true;
+
             for (int i = 0; i < originalData.numAttributes() - 1; i++)
             {
                 var attr = originalData.attribute(i);
-                pnlAttributes.Controls.Add(new Label { Text = attr.name(), Width = 80 });
+                Label lbl = new Label { Text = attr.name(), Width = 150 };
+                pnlAttributes.Controls.Add(lbl);
+
                 if (attr.isNominal())
                 {
-                    var cb = new ComboBox { Name = "a" + i, Width = 120, DropDownStyle = ComboBoxStyle.DropDownList };
+                    ComboBox cb = new ComboBox { Name = "attr_" + i, Width = 150, DropDownStyle = ComboBoxStyle.DropDownList };
                     for (int j = 0; j < attr.numValues(); j++) cb.Items.Add(attr.value(j));
+                    if (cb.Items.Count > 0) cb.SelectedIndex = 0;
                     pnlAttributes.Controls.Add(cb);
                 }
-                else pnlAttributes.Controls.Add(new TextBox { Name = "a" + i, Width = 120 });
+                else
+                {
+                    TextBox tb = new TextBox { Name = "attr_" + i, Width = 150, Text = "0" };
+                    pnlAttributes.Controls.Add(tb);
+                }
                 pnlAttributes.SetFlowBreak(pnlAttributes.Controls[pnlAttributes.Controls.Count - 1], true);
             }
         }
 
         private void btnDiscover_Click(object sender, EventArgs e)
         {
-            Instance inst = new DenseInstance(originalData.numAttributes());
-            inst.setDataset(originalData);
-            for (int i = 0; i < originalData.numAttributes() - 1; i++)
+            if (cl_BEST == null || originalData == null) return;
+
+            try
             {
-                Control c = pnlAttributes.Controls.Find("a" + i, true)[0];
-                if (originalData.attribute(i).isNominal()) inst.setValue(i, ((ComboBox)c).Text);
-                else inst.setValue(i, double.Parse(c.Text));
+                Instance inst = new DenseInstance(originalData.numAttributes());
+                inst.setDataset(originalData);
+
+                for (int i = 0; i < originalData.numAttributes() - 1; i++)
+                {
+                    Control c = pnlAttributes.Controls.Find("attr_" + i, true)[0];
+                    if (originalData.attribute(i).isNominal())
+                        inst.setValue(i, ((ComboBox)c).Text);
+                    else
+                    {
+                        double val = 0;
+                        double.TryParse(c.Text, out val);
+                        inst.setValue(i, val);
+                    }
+                }
+
+                // Bizim FilteredClassifier'ımız sayesinde, hocanın tahmin kısmındaki 
+                // "yeni instance'ı al, manuel filtre uygula" zahmetine gerek kalmıyor.
+                double resultIndex = cl_BEST.classifyInstance(inst);
+                string resultLabel = originalData.classAttribute().value((int)resultIndex);
+
+                lblResult.Text = "PREDICTION: " + resultLabel;
+                lblResult.ForeColor = Color.DarkGreen;
             }
-            lblResult.Text = "RESULT: " + originalData.classAttribute().value((int)cl_BEST.classifyInstance(inst));
+            catch (Exception ex)
+            {
+                MessageBox.Show("Prediction Error: " + ex.Message);
+            }
         }
     }
 }

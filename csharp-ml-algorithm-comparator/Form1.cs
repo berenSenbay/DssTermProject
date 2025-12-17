@@ -81,7 +81,6 @@ namespace csharp_ml_algorithm_comparator
 
             // List of 12 different approaches/parameters to satisfy project requirements
             var configs = new List<(string Name, Classifier Cl, string FilterMode)> {
-                ("1-NN (IBk)", new weka.classifiers.lazy.IBk(1), "Numeric"),
                 ("3-NN (IBk)", new weka.classifiers.lazy.IBk(3), "Numeric"),
                 ("5-NN (IBk)", new weka.classifiers.lazy.IBk(5), "Numeric"),
                 ("7-NN (IBk)", new weka.classifiers.lazy.IBk(7), "Numeric"),
